@@ -4,11 +4,14 @@ import com.springboot.exception.BusinessLogicException;
 import com.springboot.exception.ExceptionCode;
 import com.springboot.member.entity.Member;
 import com.springboot.member.repository.MemberRepository;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 
@@ -52,30 +55,101 @@ public class MemberDetailsService implements UserDetailsService {
     }
 
     /*
- 2. UserDetailsService 미리 구현된 인터페이스를 가져오고 난 뒤 메서드를 우리가 사용하고 싶은 양식에 맞도록 재정의를 해야 합니다.
-    UserDetailsService 인터페이스에 마우스를 대고 ctrl + 마우스 왼쪽 클릭하여 양식을 가져옵니다. 양식은 다음과 같습니다.
+     2. UserDetailsService 미리 구현된 인터페이스를 가져오고 난 뒤 메서드를 우리가 사용하고 싶은 양식에 맞도록 재정의를 해야 합니다.
+        UserDetailsService 인터페이스에 마우스를 대고 ctrl + 마우스 왼쪽 클릭하여 양식을 가져옵니다. 양식은 다음과 같습니다.
 
-    public interface UserDetailsService {
-        UserDetails loadUserByUsername(String username) throws UsernameNotFoundException;
-    }
+        public interface UserDetailsService {
+            UserDetails loadUserByUsername(String username) throws UsernameNotFoundException;
+        }
 
-    2.1 이 문장을 가지고 우리가 원하는 기능으로 재구성해야 하며, 새로운 UserDetails 로 재정의 해야합니다.
+        2.1 이 문장을 가지고 우리가 원하는 기능으로 재구성해야 하며, 새로운 UserDetails 로 재정의 해야합니다.
 
-    UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+            memberRepository에서 email 정보를 가지고 username 에 이메일을 등록할 수 있게 만들어줘야 합니다.
 
-    }
+            양식은 다음과 같습니다. 우리 기능에 맞게 재정의 하면 됩니다.
+            public interface MemberRepository extends JpaRepository<Member, Long> {
+            Optional<Member> findByEmail(String email);
+            }
 
      */
 
     @Override //메서드를 재정의 합니다.
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 
-        Optional<Member> optionalMember = memberRepository.findByEmail(username);
+        Optional<Member> optionalMember = memberRepository.findByEmail(username); //2.1
         Member findMember = optionalMember.orElseThrow( () ->
+                //memberRepository에서 못찾을 경우 예외 처리로 메시지를 던지기 위함 입니다.
                 new BusinessLogicException(ExceptionCode.MEMBER_NOT_FOUND));
 
-
-        return new MemberDetails(findMember);
+        return new MemberDetails(findMember); //반환 해주면 됩니다.
 
     }
+
+    /*
+    2.2 UserDetails 재정의 하는 방법
+
+    2.2.1 인터페이스 내부 구성 요소 파악 -  UserDetails 의 형태를 한번 확인 해보겠습니다. (ctrl + 왼쪽 마우스로 인터페이스 클릭)
+
+        public interface UserDetails extends Serializable {
+        Collection<? extends GrantedAuthority> getAuthorities();
+
+        String getPassword();
+
+        String getUsername();
+
+        boolean isAccountNonExpired();
+
+        boolean isAccountNonLocked();
+
+        boolean isCredentialsNonExpired();
+
+        boolean isEnabled();
+    }
+
+== 이 양식을 참고하여 우리가 사용할 MemberDetails 클래스를 만들어야 합니다. ==
+
+     */
+
+    private final class MemberDetails extends Member implements UserDetails {
+
+        MemberDetails (Member member) { //member 정보를 가져와서 MemberDetails 셋팅하기
+            setMemberId(member.getMemberId());
+            setEmail(member.getEmail());
+            setPassword(member.getPassword());
+            setRoles(member.getRoles());
+        }
+
+        @Override
+        public Collection<? extends GrantedAuthority> getAuthorities() {
+            return authorityUtils.createAuthorities(this.getRoles());
+        }
+
+        @Override
+        public String getUsername() {
+            return getEmail();
+        }
+
+        @Override
+        public boolean isAccountNonExpired() {
+            return true;
+        }
+
+        @Override
+        public boolean isAccountNonLocked() {
+            return true;
+        }
+
+        @Override
+        public boolean isCredentialsNonExpired() {
+            return true;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return true;
+        }
+    }
+
+
 }
