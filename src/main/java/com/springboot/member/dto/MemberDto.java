@@ -13,10 +13,18 @@ import javax.validation.constraints.Pattern;
 public class MemberDto {
     @Getter
     @AllArgsConstructor // TODO 테스트를 위해 추가됨
+
     public static class Post {
         @NotBlank
         @Email
         private String email;
+
+        /*
+        패스워드 필드 추가
+        회원 등록 시, 회원의 패스워드 정보를 전달받기 위해 MemberDto 클래스에 password 필드를 추가한다.
+         */
+        @NotBlank
+        private String password;
 
         @NotBlank(message = "이름은 공백이 아니어야 합니다.")
         private String name;

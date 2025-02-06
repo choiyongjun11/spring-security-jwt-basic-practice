@@ -23,6 +23,10 @@ public class Member extends Auditable {
     @Column(nullable = false, updatable = false, unique = true)
     private String email;
 
+    //패스워드 필드를 추가합니다. password는 암호화되어 저장되기 때문에 길이를 100으로 지정했습니다.
+    @Column(length = 100, nullable = false)
+    private String password;
+
     @Column(length = 100, nullable = false)
     private String name;
 
@@ -39,6 +43,12 @@ public class Member extends Auditable {
     // 수정된 부분
     @OneToOne(mappedBy = "member", cascade = {CascadeType.PERSIST, CascadeType.REMOVE})
     private Stamp stamp;
+
+    //roles 필드를 추가합니다. ElemnetCollection 애너테이션을 이용해 사용자 등록 시, 사용자의 권한을 등록하기 위한 권한 테이블을 생성합니다.
+    @ElementCollection(fetch = FetchType.EAGER)
+    private List<String> roles = new ArrayList<>();
+
+
 
     public Member(String email) {
         this.email = email;
