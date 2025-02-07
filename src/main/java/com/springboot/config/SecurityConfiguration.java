@@ -1,8 +1,20 @@
 package com.springboot.config;
 
+import com.springboot.auth.AuthorityUtils;
+import com.springboot.auth.filter.JwtAuthenticationFilter;
+import com.springboot.auth.filter.JwtVerificaitonFilter;
+import com.springboot.auth.handler.MemberAccessDeniedHandler;
+import com.springboot.auth.handler.MemberAuthenticationEntryPoint;
+import com.springboot.auth.handler.MemberAuthenticationFailureHandler;
+import com.springboot.auth.handler.MemberAuthenticationSuccessHandler;
+import com.springboot.auth.jwt.JwtTokenizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -16,6 +28,14 @@ import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 public class SecurityConfiguration {
+
+    private final JwtTokenizer jwtTokenizer;
+    private final AuthorityUtils authorityUtils;
+
+    public SecurityConfiguration(JwtTokenizer jwtTokenizer, AuthorityUtils authorityUtils) {
+        this.jwtTokenizer = jwtTokenizer;
+        this.authorityUtils = authorityUtils;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -40,11 +60,32 @@ public class SecurityConfiguration {
              하지만, 프론트엔드 웹앱과의 http 통신에서 에러를 만나게 될 수 있으므로 사전 학습 차원에서 설정했다.
               */
                 //웹 페이지는 CSR 방식으로 사용하고자 합니다. JSON 형태로 데이터를 주고 받는 것이며 방해되는 기능을 OFF 해주어야 합니다.
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)//세션을 생성하지 않으며, SecurityContext 정보를 얻기 위해 결코 세션을 사용하지 않습니다.
+                .and()
                 .formLogin().disable() //4. CSR 방식에서 주로 사용하는 JSON 포맷으로 username과 password를 전송하는 방식을 사용할 것이라 formLogin을 비활성화 한다.
                 .httpBasic().disable() //5. username, password 정보를 http header에 실어서 인증을 하는 방식입니다. 우리 프로젝트에서는 사용하지 않을 것이여서 비활성 합니다.
-
+                .exceptionHandling() //new
+                .authenticationEntryPoint(new MemberAuthenticationEntryPoint()) //new
+                .accessDeniedHandler(new MemberAccessDeniedHandler()) //new
+                .and()
+                .apply(new CustomFilterConfigurer())
+                .and()
                 .authorizeHttpRequests(authorize -> authorize
-                        .anyRequest().permitAll() // 6. jwt를 적용하기 전이므로 우선은 모든 http request 요청에 대해서 접근을 허용하도록 설정했습니다.
+                                //회원 등록의 경우, 접근 권한 여부와 상관없이 누구나 접근이 가능해야 합니다.
+                                .antMatchers(HttpMethod.POST, "/*/member").permitAll()
+                                //회원 정보 수정의 경우, 일반 사용자만 접근이 가능하도록 허용합니다. **는 하위 URL로 어떤 URL이 오더라도 매치가 된다는 의미입니다.
+                                .antMatchers(HttpMethod.PATCH, "/*/members/**").hasRole("USER")
+                                //모든 회원 정보의 목록은 관리자권한을 가진 사용자만 접근이 가능합니다.
+                                .antMatchers(HttpMethod.GET, "/*/members").hasAnyRole("ADMIN")
+                                //특정 회원에 대한 정보 조회는 일반 사용자와 관리자 권한을 가진 사용자 모두 접근이 가능하면 될 것 같습니다.
+                                .antMatchers(HttpMethod.GET, "/*/members/**").hasAnyRole("USER", "ADMIN")
+                                //특정 회원을 삭제하는 요청은 사용자가 탈퇴 같은 처리를 할 수 있어야 하므로 일반사용자 권한만 가진 사용자만 접근이 가능하도록 허용합니다.
+
+                                .antMatchers(HttpMethod.DELETE, "/*/members/**").hasAnyRole("USER")
+
+                                // 6. jwt를 적용하기 전이므로 우선은 모든 http request 요청에 대해서 접근을 허용하도록 설정했습니다.
+                                .anyRequest().permitAll()   //서버 측으로 들어오는 모든 request에 대해서 접근을 허용하고 있다.
+
                 );
 
         return http.build();
@@ -74,6 +115,31 @@ public class SecurityConfiguration {
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
+    }
+
+    //추가
+    public class CustomFilterConfigurer extends AbstractHttpConfigurer<CustomFilterConfigurer, HttpSecurity> {
+
+        @Override
+        public void configure(HttpSecurity builder) throws Exception {
+            AuthenticationManager authenticationManager = builder.getSharedObject(AuthenticationManager.class);
+
+            JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(authenticationManager,jwtTokenizer);
+            jwtAuthenticationFilter.setFilterProcessesUrl("/v11/auth/login");
+
+            jwtAuthenticationFilter.setAuthenticationSuccessHandler(new MemberAuthenticationSuccessHandler()); //3
+            jwtAuthenticationFilter.setAuthenticationFailureHandler(new MemberAuthenticationFailureHandler()); //4
+
+            //filter의 인스턴스를 생성하면서 JwtVerificationFilter에서 사용되는 객체들을 생성자로 DI 해줍니다.
+            JwtVerificaitonFilter jwtVerificaitonFilter = new JwtVerificaitonFilter(jwtTokenizer, authorityUtils);
+
+            //VerificationFilter는 AuthenticationFilter에서 로그인 인증에 성공한 후 발급받은 JWT 클라이언트의
+            //request header(Authorizaiton 헤더)에 포함되어 있을 경우에만 동작합니다.
+            builder
+                    .addFilter(jwtAuthenticationFilter)
+                    .addFilterAfter(jwtVerificaitonFilter, JwtAuthenticationFilter.class);
+
+        }
     }
 
 }
