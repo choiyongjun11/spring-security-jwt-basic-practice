@@ -10,14 +10,21 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+
+/*
+ ErrorResponse 클래스!
+ SPRING BOOT 에서 예외 처리 시 JSON 응답을 표준화하는 역할을 합니다.
+ 예외 발생 시 발생한 http 상태 코드, 메시지, 유효성 검사 오류 목록 등을 포함한 JSON을 클라이언트에 반환합니다.
+ */
+
 @Getter
 public class ErrorResponse {
-    private int status;
-    private String message;
-    private List<FieldError> fieldErrors;
-    private List<ConstraintViolationError> violationErrors;
+    private int status; //HTTP 상태 코드
+    private String message; //예외 메시지
+    private List<FieldError> fieldErrors; //스프링의 @valid 유효성 검사에서 발생한 필드 오류 목록
+    private List<ConstraintViolationError> violationErrors; //bean validation 에서 발생한 오류 목록
 
-    private ErrorResponse(int status, String message) {
+    private ErrorResponse(int status, String message) { //상태, 메시지 설정 기본 생성자
         this.status = status;
         this.message = message;
     }

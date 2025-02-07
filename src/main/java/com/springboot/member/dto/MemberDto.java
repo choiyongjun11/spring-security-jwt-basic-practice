@@ -49,7 +49,6 @@ public class MemberDto {
 
         private Member.MemberStatus memberStatus;
 
-
         public void setMemberId(long memberId) {
             this.memberId = memberId;
         }

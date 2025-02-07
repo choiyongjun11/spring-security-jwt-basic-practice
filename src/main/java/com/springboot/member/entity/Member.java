@@ -44,11 +44,10 @@ public class Member extends Auditable {
     @OneToOne(mappedBy = "member", cascade = {CascadeType.PERSIST, CascadeType.REMOVE})
     private Stamp stamp;
 
-    //roles 필드를 추가합니다. ElemnetCollection 애너테이션을 이용해 사용자 등록 시, 사용자의 권한을 등록하기 위한 권한 테이블을 생성합니다.
+    //roles 필드를 추가합니다.
+    // ElementCollection 애너테이션을 이용해 사용자 등록 시, 사용자의 권한을 등록하기 위한 권한 테이블을 생성합니다.
     @ElementCollection(fetch = FetchType.EAGER)
     private List<String> roles = new ArrayList<>();
-
-
 
     public Member(String email) {
         this.email = email;
